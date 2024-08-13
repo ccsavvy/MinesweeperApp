@@ -12,7 +12,7 @@ class MinesweeperGame {
     /**
      * @property grid The 2D array representing the game board, where each Cell holds information about mines and state.
      * @property gridSize The size of the grid (e.g., a gridSize of 4 represents a 4x4 grid).
-     * @property mineCount The total number of mines placed on the grid.
+     * @property mineCount The total number of mines placed on the grid.(maximum is 35% of the total squares)
      */
 
     lateinit var grid: Array<Array<Cell>>
@@ -24,7 +24,7 @@ class MinesweeperGame {
      */
     fun start() {
         while (true) {
-            setupGame()
+            setupGame(gridSize = 4, mineCount = 5)
             playGame()
             println("Press any key to play again...")
             readlnOrNull() // Wait for any key to be pressed
@@ -37,11 +37,16 @@ class MinesweeperGame {
      * @param gridSize Optional parameter to set the grid size. If not provided, the user is prompted.
      * @param mineCount Optional parameter to set the mine count. If not provided, the user is prompted.
      */
-    fun setupGame(gridSize: Int = 0, mineCount: Int = 0) {
+    fun setupGame(gridSize: Int, mineCount: Int) {
+        if (gridSize <= 0) throw IllegalArgumentException("Grid size must be a positive integer.")
+
+        val maxMines = (gridSize * gridSize * 0.35).toInt()
+        if (mineCount < 0 || mineCount > maxMines) throw IllegalArgumentException("Mine count must be between 0 and $maxMines (35% of the total squares).")
+
         println("Welcome to Minesweeper!\n")
 
-        this.gridSize = if (gridSize == 0) getGridSize() else gridSize
-        this.mineCount = if (mineCount == 0) getMineCount() else mineCount
+        this.gridSize = getGridSize()
+        this.mineCount = getMineCount()
 
         initializeGrid()
         placeMines()
@@ -49,6 +54,39 @@ class MinesweeperGame {
         // Initial grid display
         println("\nHere is your minefield:")
         displayGrid()
+    }
+
+    /**
+     * Initializes the grid with a custom configuration.
+     *
+     * @param customGrid A 2D array representing the custom grid to be used for the game.
+     *                   Each element in the array should be a Cell object.
+     *                   The size of the grid is determined by the dimensions of the array.
+     * @throws IllegalArgumentException if the provided grid is empty or non-square.
+     */
+    fun initializeCustomGrid(customGrid: Array<Array<Cell>>) {
+        require(customGrid.isNotEmpty() && customGrid.all { it.size == customGrid.size }) {
+            "The custom grid must be non-empty and square-shaped."
+        }
+        this.gridSize = customGrid.size
+        this.grid = customGrid
+    }
+
+    /**
+     * Places mines on the grid at the specified locations.
+     *
+     * @param mineLocations A list of pairs representing the coordinates (x, y) where mines should be placed.
+     *                      The coordinates must be within the bounds of the grid.
+     * @throws IllegalArgumentException if any coordinates are out of bounds.
+     */
+    fun placeCustomMines(mineLocations: List<Pair<Int, Int>>) {
+        mineLocations.forEach { (x, y) ->
+            require(x in 0 until gridSize && y in 0 until gridSize) {
+                "Mine location ($x, $y) is out of bounds for the grid size $gridSize."
+            }
+
+            grid[x][y].isMine = true
+        }
     }
 
     /**
@@ -99,15 +137,6 @@ class MinesweeperGame {
         val maxMines = (gridSize * gridSize * 0.35).toInt() // (maximum is 35% of the total squares)
         print("Enter the number of mines to place on the grid (maximum is $maxMines): ")
         return readlnOrNull()?.toIntOrNull()?.coerceIn(1, maxMines) ?: maxMines
-
-//        return if (maxMines > 0 ) {
-//            // Fix java.lang.IllegalArgumentException: Cannot coerce value to an empty range:
-//            // maximum 0 is less than minimum 1.
-//            //at kotlin.ranges.RangesKt___RangesKt.coerceIn(_Ranges.kt:1413)
-//            readlnOrNull()?.toIntOrNull()?.coerceIn(1, maxMines) ?: maxMines
-//        } else {
-//            0
-//        }
     }
 
     /**
@@ -140,18 +169,27 @@ class MinesweeperGame {
      * @return True if the square was successfully uncovered and not a mine, false if it's a mine.
      */
     fun uncoverSquare(x: Int, y: Int): Boolean {
-        if (grid[x][y].isRevealed) return true
+        // Return if the coordinates are invalid or the square is already revealed
+        if (!isValidCoordinate(x, y) || grid[x][y].isRevealed) return true
 
+        // Reveal the square
         grid[x][y].isRevealed = true
+
+        // If it's a mine, game over
         if (grid[x][y].isMine) return false
 
-        grid[x][y].adjacentMines = countAdjacentMines(x, y)
-        if (grid[x][y].adjacentMines == 0) {
+        // Count adjacent mines
+        val adjacentMines = countAdjacentMines(x, y)
+        grid[x][y].adjacentMines = adjacentMines
+
+        // If there are no adjacent mines, uncover adjacent squares recursively
+        if (adjacentMines == 0) {
             uncoverAdjacentSquares(x, y)
         }
 
         return true
     }
+
 
     /**
      * Counts the number of adjacent mines around a given square.
@@ -161,17 +199,9 @@ class MinesweeperGame {
      * @return The number of adjacent mines.
      */
     fun countAdjacentMines(x: Int, y: Int): Int {
-        var count = 0
-        for (i in -1..1) {
-            for (j in -1..1) {
-                val nx = x + i
-                val ny = y + j
-                if (nx in 0 until gridSize && ny in 0 until gridSize && grid[nx][ny].isMine) {
-                    count++
-                }
-            }
+        return getAdjacentCoordinates(x, y).count { (nx, ny) ->
+            grid[nx][ny].isMine
         }
-        return count
     }
 
     /**
@@ -181,15 +211,43 @@ class MinesweeperGame {
      * @param y The y-coordinate of the square.
      */
     private fun uncoverAdjacentSquares(x: Int, y: Int) {
+        getAdjacentCoordinates(x, y).forEach { (nx, ny) ->
+            if (!grid[nx][ny].isRevealed && !grid[nx][ny].isMine) {
+                uncoverSquare(nx, ny)
+            }
+        }
+    }
+
+    /**
+     * Returns a list of valid adjacent coordinates.
+     *
+     * @param x The x-coordinate of the square.
+     * @param y The y-coordinate of the square.
+     * @return A list of valid adjacent coordinates.
+     */
+    private fun getAdjacentCoordinates(x: Int, y: Int): List<Pair<Int, Int>> {
+        val coordinates = mutableListOf<Pair<Int, Int>>()
         for (i in -1..1) {
             for (j in -1..1) {
                 val nx = x + i
                 val ny = y + j
-                if (nx in 0 until gridSize && ny in 0 until gridSize && !grid[nx][ny].isRevealed) {
-                    uncoverSquare(nx, ny)
+                if (isValidCoordinate(nx, ny) && (nx != x || ny != y)) {
+                    coordinates.add(Pair(nx, ny))
                 }
             }
         }
+        return coordinates
+    }
+
+    /**
+     * Checks if the given coordinates are within the grid bounds.
+     *
+     * @param x The x-coordinate.
+     * @param y The y-coordinate.
+     * @return True if the coordinates are valid, false otherwise.
+     */
+    private fun isValidCoordinate(x: Int, y: Int): Boolean {
+        return x in 0 until gridSize && y in 0 until gridSize
     }
 
     /**
@@ -220,6 +278,7 @@ class MinesweeperGame {
     fun checkWinCondition(): Boolean {
         for (row in grid) {
             for (cell in row) {
+                // If a non-mine cell is not revealed, the game is not yet won
                 if (!cell.isMine && !cell.isRevealed) {
                     return false
                 }
