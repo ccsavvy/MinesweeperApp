@@ -1,4 +1,4 @@
-package com.example.minesweepergameapp
+package com.example.minesweepergameapp.mvc
 
 // Entry point for the Minesweeper game
 fun main() {

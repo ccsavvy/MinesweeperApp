@@ -1,5 +1,7 @@
 package com.example.minesweepergameapp
 
+import com.example.minesweepergameapp.mvc.Cell
+import com.example.minesweepergameapp.mvc.MinesweeperGame
 import junit.framework.Assert.assertEquals
 import junit.framework.Assert.assertFalse
 import junit.framework.Assert.assertTrue

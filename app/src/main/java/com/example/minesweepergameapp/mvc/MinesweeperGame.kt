@@ -1,4 +1,4 @@
-package com.example.minesweepergameapp
+package com.example.minesweepergameapp.mvc
 
 import kotlin.random.Random
 
